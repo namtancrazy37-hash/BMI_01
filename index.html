@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบคัดกรองดัชนีมวลกาย (BMI) - คลินิกจำลอง</title>
+    <!-- โหลด Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- โหลดฟอนต์ Prompt และ Sarabun จาก Google Fonts เพื่อความอ่านง่ายและทันสมัย -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Prompt', 'Sarabun', 'sans-serif'],
+                        body: ['Sarabun', 'sans-serif'],
+                    },
+                    colors: {
+                        clinic: {
+                            50: '#f0fdfa',
+                            100: '#ccfbf1',
+                            200: '#99f6e4',
+                            500: '#14b8a6',
+                            600: '#0d9488',
+                            700: '#0f766e',
+                            800: '#115e59',
+                            900: '#134e4a',
+                        },
+                        skybrand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-100 text-slate-900 font-sans min-h-screen antialiased selection:bg-clinic-200 selection:text-clinic-900">
+
+    <!-- แถบแจ้งเตือนด้านบน (Toast Notification) แทนการใช้ alert() -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+    <!-- ส่วนหัว (Header) -->
+    <header class="bg-gradient-to-r from-skybrand-700 via-clinic-700 to-clinic-600 text-white shadow-lg sticky top-0 z-30">
+        <div class="max-w-6xl mx-auto px-4 py-3.5 sm:px-6 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <!-- ภาพประกอบ SVG โลโก้คลินิกและไอคอนวัดสุขภาพ -->
+                <div class="bg-white/15 backdrop-blur-sm p-2 rounded-2xl border border-white/25 shadow-inner">
+                    <svg class="w-8 h-8 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white">Clinic BMI Screener</h1>
+                        <span class="bg-amber-300 text-slate-950 text-xs font-bold px-2.5 py-0.5 rounded-full shadow-sm">คลินิกจำลอง</span>
+                    </div>
+                    <p class="text-xs sm:text-sm text-clinic-100 font-body">เครื่องมือคัดกรองดัชนีมวลกายเบื้องต้นสำหรับผู้ใหญ่ (18 ปีขึ้นไป)</p>
+                </div>
+            </div>
+
+            <!-- ปุ่มรีเซ็ตด่วนสำหรับผู้รับบริการรายถัดไป -->
+            <button type="button" onclick="resetForNextPatient()" class="bg-white text-clinic-800 hover:bg-clinic-50 active:scale-95 transition-all font-semibold text-sm px-4 py-2.5 rounded-xl shadow-md flex items-center gap-2 border border-clinic-200">
+                <svg class="w-4 h-4 text-clinic-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                <span>รายถัดไป (Reset)</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- เนื้อหาหลัก (Main Container) -->
+    <main class="max-w-6xl mx-auto px-4 py-6 sm:px-6 space-y-6">
+
+        <!-- แบนเนอร์ภาพประกอบเจ้าหน้าที่คัดกรอง & คำแนะนำการใช้งาน -->
+        <section class="bg-white rounded-2xl p-4 sm:p-5 shadow-sm border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <!-- ภาพประกอบเวกเตอร์ SVG เจ้าหน้าที่คัดกรองสุขภาพ -->
+                <div class="shrink-0 w-16 h-16 sm:w-20 sm:h-20 bg-skybrand-50 rounded-2xl flex items-center justify-center border border-skybrand-200 p-2">
+                    <svg viewBox="0 0 100 100" class="w-full h-full">
+                        <!-- พื้นหลังวงกลม -->
+                        <circle cx="50" cy="50" r="45" fill="#e0f2fe"/>
+                        <!-- เสื้อกาวน์เจ้าหน้าที่ -->
+                        <path d="M22 92 C22 72, 35 64, 50 64 C65 64, 78 72, 78 92 Z" fill="#ffffff" stroke="#0284c7" stroke-width="3"/>
+                        <path d="M42 64 L50 78 L58 64" fill="#ccfbf1" stroke="#0d9488" stroke-width="2.5"/>
+                        <!-- หูฟังแพทย์ (Stethoscope) -->
+                        <path d="M36 68 C36 80, 64 80, 64 68" fill="none" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round"/>
+                        <circle cx="64" cy="68" r="3.5" fill="#14b8a6"/>
+                        <!-- ศีรษะ -->
+                        <circle cx="50" cy="40" r="16" fill="#fed7aa" stroke="#0f172a" stroke-width="2"/>
+                        <!-- ทรงผม -->
+                        <path d="M34 38 C34 24, 66 24, 66 38 C64 31, 36 31, 34 38 Z" fill="#1e293b"/>
+                        <!-- รอยยิ้ม -->
+                        <path d="M45 45 Q50 49 55 45" fill="none" stroke="#0f172a" stroke-width="2" stroke-linecap="round"/>
+                        <!-- เครื่องหมายบวกทางการแพทย์ -->
+                        <rect x="74" y="16" width="16" height="16" rx="4" fill="#10b981"/>
+                        <path d="M82 20 V28 M78 24 H86" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-base sm:text-lg font-bold text-slate-900">จุดคัดกรองสัญญาณชีพและสัดส่วนร่างกาย (Triage Station)</h2>
+                    <p class="text-sm text-slate-700 font-body mt-0.5">
+                        กรุณายืนยันเกณฑ์อายุ 18 ปีขึ้นไป ระบุเพศ และกรอกน้ำหนัก-ส่วนสูงที่วัดได้จริง เพื่อประเมินผลและบันทึกการคัดกรองเบื้องต้น
+                    </p>
+                </div>
+            </div>
+            <!-- ตัวเลขลำดับผู้รับบริการจำลอง -->
+            <div class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-center sm:text-right shrink-0 w-full sm:w-auto">
+                <span class="text-xs font-semibold text-slate-600 block">คิวคัดกรองปัจจุบัน</span>
+                <span id="current-queue-display" class="text-xl font-bold text-skybrand-700">#001</span>
+            </div>
+        </section>
+
+        <!-- Grid 2 คอลัมน์: ฝั่งซ้ายกรอกข้อมูล (Input) / ฝั่งขวาแสดงผลลัพธ์ (Output) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            <!-- คอลัมน์ซ้าย: ฟอร์มกรอกข้อมูลการคัดกรอง (7 ส่วนบนจอใหญ่) -->
+            <div class="lg:col-span-6 bg-white rounded-3xl p-5 sm:p-7 shadow-md border border-slate-200 space-y-6">
+                
+                <!-- 1. การยืนยันเกณฑ์อายุ 18 ปีขึ้นไป -->
+                <div class="space-y-3">
+                    <label class="block text-sm font-bold text-slate-900 uppercase tracking-wide">
+                        1. ตรวจสอบเกณฑ์อายุผู้รับบริการ <span class="text-rose-600">*</span>
+                    </label>
+                    <div class="grid grid-cols-2 gap-3" role="group" aria-label="เกณฑ์อายุ">
+                        <button type="button" id="btn-age-adult" onclick="setAgeGroup('adult')"
+                            class="p-3.5 rounded-2xl border-2 border-clinic-600 bg-clinic-50 text-clinic-950 font-bold text-left transition-all flex items-center gap-3 shadow-sm">
+                            <span class="w-6 h-6 rounded-full bg-clinic-600 text-white flex items-center justify-center shrink-0">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>
+                            </span>
+                            <div>
+                                <div class="text-sm sm:text-base">อายุ 18 ปีขึ้นไป</div>
+                                <div class="text-xs font-normal text-clinic-800">ผู้ใหญ่ (เกณฑ์มาตรฐาน)</div>
+                            </div>
+                        </button>
+
+                        <button type="button" id="btn-age-minor" onclick="setAgeGroup('minor')"
+                            class="p-3.5 rounded-2xl border-2 border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-left transition-all flex items-center gap-3">
+                            <span class="w-6 h-6 rounded-full border-2 border-slate-300 flex items-center justify-center shrink-0"></span>
+                            <div>
+                                <div class="text-sm sm:text-base">ต่ำกว่า 18 ปี</div>
+                                <div class="text-xs font-normal text-slate-500">เด็ก / วัยรุ่น</div>
+                            </div>
+                        </button>
+                    </div>
+
+                    <!-- กล่องแจ้งเตือนกรณีอายุต่ำกว่า 18 ปี -->
+                    <div id="minor-warning-box" class="hidden bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 text-amber-950 space-y-2 animate-fadeIn">
+                        <div class="flex items-start gap-3">
+                            <svg class="w-6 h-6 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                            <div>
+                                <h3 class="font-bold text-base text-amber-950">ไม่สามารถใช้เกณฑ์ผู้ใหญ่คัดกรองได้</h3>
+                                <p class="text-sm font-body text-amber-900 mt-1 leading-relaxed">
+                                    เครื่องมือนี้คำนวณและแปลผลตามเกณฑ์ผู้ใหญ่อายุ <strong>18 ปีขึ้นไป</strong> เท่านั้น สำหรับผู้รับบริการที่อายุต่ำกว่า 18 ปี กรุณาใช้ <strong>กราฟอ้างอิงการเจริญเติบโต (น้ำหนักตามเกณฑ์ส่วนสูง)</strong> แยกตามเพศและอายุของกรมอนามัยแทน
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ส่วนฟอร์มสำหรับผู้ใหญ่ (จะถูกปิดการใช้งานชั่วคราวหากเลือกอายุต่ำกว่า 18 ปี) -->
+                <div id="adult-form-section" class="space-y-6 transition-opacity duration-200">
+                    
+                    <!-- 2. เลือกเพศ (Gender) -->
+                    <div class="space-y-3">
+                        <label class="block text-sm font-bold text-slate-900 uppercase tracking-wide">
+                            2. ระบุเพศ (Gender) <span class="text-rose-600">*</span>
+                        </label>
+                        <div class="grid grid-cols-2 gap-3.5">
+                            <!-- ปุ่มเพศชาย -->
+                            <button type="button" id="btn-gender-male" onclick="selectGender('male')"
+                                class="p-4 rounded-2xl border-2 border-skybrand-600 bg-skybrand-50 text-skybrand-950 font-bold transition-all flex items-center justify-center gap-3 shadow-sm active:scale-98">
+                                <div class="w-10 h-10 rounded-xl bg-skybrand-600 text-white flex items-center justify-center shrink-0">
+                                    <!-- ไอคอนเพศชาย -->
+                                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="10" cy="14" r="6"/>
+                                        <path d="M20 4l-5.8 5.8"/>
+                                        <path d="M15 4h5v5"/>
+                                    </svg>
+                                </div>
+                                <div class="text-left">
+                                    <span class="block text-base sm:text-lg">ชาย</span>
+                                    <span class="block text-xs font-normal text-skybrand-800">Male</span>
+                                </div>
+                            </button>
+
+                            <!-- ปุ่มเพศหญิง -->
+                            <button type="button" id="btn-gender-female" onclick="selectGender('female')"
+                                class="p-4 rounded-2xl border-2 border-slate-200 bg-white hover:bg-rose-50/40 text-slate-800 font-bold transition-all flex items-center justify-center gap-3 active:scale-98">
+                                <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                                    <!-- ไอคอนเพศหญิง -->
+                                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="12" cy="9" r="6"/>
+                                        <path d="M12 15v6"/>
+                                        <path d="M9 18h6"/>
+                                    </svg>
+                                </div>
+                                <div class="text-left">
+                                    <span class="block text-base sm:text-lg">หญิง</span>
+                                    <span class="block text-xs font-normal text-slate-500">Female</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 3. น้ำหนัก (กิโลกรัม) -->
+                    <div class="space-y-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                        <div class="flex items-center justify-between">
+                            <label for="input-weight" class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-clinic-600"></span>
+                                3. น้ำหนักตัว (กิโลกรัม / kg)
+                            </label>
+                            <span class="text-xs font-semibold text-slate-600 bg-white px-2.5 py-1 rounded-lg border border-slate-200">เกณฑ์: 25 - 300 kg</span>
+                        </div>
+                        
+                        <div class="flex items-center gap-2.5">
+                            <button type="button" onclick="adjustValue('weight', -0.5)" aria-label="ลดน้ำหนัก 0.5 กิโลกรัม"
+                                class="w-14 h-14 rounded-2xl bg-white hover:bg-slate-100 active:bg-slate-200 border-2 border-slate-300 text-slate-900 font-bold text-2xl flex items-center justify-center shadow-sm transition-colors shrink-0 select-none">
+                                −
+                            </button>
+                            <div class="relative flex-1">
+                                <input type="number" id="input-weight" step="0.1" min="25" max="300" value="62.0" inputmode="decimal"
+                                    oninput="calculateBMI()"
+                                    class="w-full h-14 text-center text-2xl sm:text-3xl font-bold text-slate-950 bg-white border-2 border-slate-300 focus:border-clinic-600 focus:ring-4 focus:ring-clinic-500/20 rounded-2xl outline-none transition-all">
+                                <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-500 pointer-events-none">kg</span>
+                            </div>
+                            <button type="button" onclick="adjustValue('weight', 0.5)" aria-label="เพิ่มน้ำหนัก 0.5 กิโลกรัม"
+                                class="w-14 h-14 rounded-2xl bg-white hover:bg-slate-100 active:bg-slate-200 border-2 border-slate-300 text-slate-900 font-bold text-2xl flex items-center justify-center shadow-sm transition-colors shrink-0 select-none">
+                                +
+                            </button>
+                        </div>
+                        <p id="weight-error" class="hidden text-xs font-bold text-rose-700 bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-200">
+                            กรุณาระบุน้ำหนักระหว่าง 25.0 ถึง 300.0 กิโลกรัม
+                        </p>
+                    </div>
+
+                    <!-- 4. ส่วนสูง (เซนติเมตร) -->
+                    <div class="space-y-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                        <div class="flex items-center justify-between">
+                            <label for="input-height" class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-skybrand-600"></span>
+                                4. ส่วนสูง (เซนติเมตร / cm)
+                            </label>
+                            <span class="text-xs font-semibold text-slate-600 bg-white px-2.5 py-1 rounded-lg border border-slate-200">เกณฑ์: 100 - 250 cm</span>
+                        </div>
+                        
+                        <div class="flex items-center gap-2.5">
+                            <button type="button" onclick="adjustValue('height', -1)" aria-label="ลดส่วนสูง 1 เซนติเมตร"
+                                class="w-14 h-14 rounded-2xl bg-white hover:bg-slate-100 active:bg-slate-200 border-2 border-slate-300 text-slate-900 font-bold text-2xl flex items-center justify-center shadow-sm transition-colors shrink-0 select-none">
+                                −
+                            </button>
+                            <div class="relative flex-1">
+                                <input type="number" id="input-height" step="0.5" min="100" max="250" value="168.0" inputmode="decimal"
+                                    oninput="calculateBMI()"
+                                    class="w-full h-14 text-center text-2xl sm:text-3xl font-bold text-slate-950 bg-white border-2 border-slate-300 focus:border-skybrand-600 focus:ring-4 focus:ring-skybrand-500/20 rounded-2xl outline-none transition-all">
+                                <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-500 pointer-events-none">cm</span>
+                            </div>
+                            <button type="button" onclick="adjustValue('height', 1)" aria-label="เพิ่มส่วนสูง 1 เซนติเมตร"
+                                class="w-14 h-14 rounded-2xl bg-white hover:bg-slate-100 active:bg-slate-200 border-2 border-slate-300 text-slate-900 font-bold text-2xl flex items-center justify-center shadow-sm transition-colors shrink-0 select-none">
+                                +
+                            </button>
+                        </div>
+                        <p id="height-error" class="hidden text-xs font-bold text-rose-700 bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-200">
+                            กรุณาระบุส่วนสูงระหว่าง 100.0 ถึง 250.0 เซนติเมตร
+                        </p>
+                    </div>
+
+                    <!-- ปุ่มบันทึกผลการคัดกรอง -->
+                    <div class="pt-1">
+                        <button type="button" id="btn-save-record" onclick="saveScreeningRecord()"
+                            class="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-clinic-600 to-skybrand-600 hover:from-clinic-700 hover:to-skybrand-700 active:scale-99 text-white font-bold text-base sm:text-lg shadow-lg shadow-clinic-600/25 transition-all flex items-center justify-center gap-2.5">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span>บันทึกผลการคัดกรองลงประวัติรอบวัน</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- คอลัมน์ขวา: การแปลผลและคำแนะนำทางคลินิก (6 ส่วนบนจอใหญ่) -->
+            <div class="lg:col-span-6 space-y-6">
+                
+                <!-- การ์ดแสดงผลค่า BMI และเกณฑ์มาตรฐาน -->
+                <div id="result-card" class="bg-white rounded-3xl p-5 sm:p-7 shadow-md border border-slate-200 space-y-6 relative overflow-hidden">
+                    
+                    <!-- ตัวสลับเกณฑ์มาตรฐาน: เกณฑ์เอเชีย (ไทย) vs เกณฑ์สากล (WHO) -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-100">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-600">มาตรฐานการแปลผล:</span>
+                        <div class="inline-flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                            <button type="button" id="std-asia" onclick="setStandard('asia')"
+                                class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold bg-white text-clinic-900 shadow-sm transition-all">
+                                เกณฑ์เอเชีย / กรมอนามัย (ไทย)
+                            </button>
+                            <button type="button" id="std-who" onclick="setStandard('who')"
+                                class="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition-all">
+                                เกณฑ์สากล (WHO)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ส่วนแสดงตัวเลข BMI ทศนิยม 1 ตำแหน่ง -->
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50 rounded-2xl p-5 border border-slate-200">
+                        <div class="text-center sm:text-left">
+                            <div class="flex items-center justify-center sm:justify-start gap-2">
+                                <span class="text-sm font-bold text-slate-700">ค่าดัชนีมวลกาย (BMI)</span>
+                                <span id="result-gender-badge" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-skybrand-100 text-skybrand-900">เพศชาย</span>
+                            </div>
+                            <div class="mt-1 flex items-baseline justify-center sm:justify-start gap-2">
+                                <span id="bmi-value" class="text-5xl sm:text-6xl font-extrabold tracking-tight text-slate-950">22.0</span>
+                                <span class="text-base font-bold text-slate-600">kg/m²</span>
+                            </div>
+                            <p id="healthy-weight-range" class="text-xs sm:text-sm font-medium text-slate-700 mt-1.5">
+                                น้ำหนักที่เหมาะสมตามส่วนสูง: <strong>52.2 - 64.6 kg</strong>
+                            </p>
+                        </div>
+
+                        <!-- ป้ายสถานะผลลัพธ์ (Badge) -->
+                        <div id="bmi-status-box" class="px-5 py-4 rounded-2xl bg-emerald-100 border-2 border-emerald-500 text-emerald-950 text-center min-w-[160px] shadow-sm">
+                            <span class="text-xs font-bold uppercase tracking-wider block opacity-80">ผลการประเมิน</span>
+                            <span id="bmi-category-label" class="text-xl sm:text-2xl font-extrabold block mt-0.5">ปกติ / สมส่วน</span>
+                            <span id="bmi-risk-label" class="text-xs font-bold block mt-1">ความเสี่ยงโรคแทรกซ้อนต่ำ</span>
+                        </div>
+                    </div>
+
+                    <!-- แถบวัดระดับสี (Visual BMI Gauge) -->
+                    <div class="space-y-2 pt-1">
+                        <div class="flex justify-between text-xs font-bold text-slate-700">
+                            <span>ผอม (&lt;18.5)</span>
+                            <span id="gauge-mid-labels">ปกติ (18.5-22.9) | ท้วม (23-24.9)</span>
+                            <span>อ้วน (&ge;25.0)</span>
+                        </div>
+                        
+                        <div class="relative h-6 w-full rounded-full overflow-hidden flex shadow-inner border border-slate-300 bg-slate-200" id="bmi-gauge-bar">
+                            <!-- แถบสีจะถูกสร้างด้วย JS ให้ตรงสัดส่วนของเกณฑ์ที่เลือก -->
+                        </div>
+
+                        <!-- ตัวชี้ตำแหน่ง (Pointer) -->
+                        <div class="relative h-6 w-full">
+                            <div id="bmi-pointer" class="absolute top-0 -translate-x-1/2 transition-all duration-300 flex flex-col items-center" style="left: 40%;">
+                                <div class="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[10px] border-b-slate-900"></div>
+                                <span id="pointer-text" class="text-[11px] font-extrabold bg-slate-900 text-white px-2 py-0.5 rounded-md -mt-0.5 shadow">22.0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- คำแนะนำการคัดกรองเบื้องต้นสำหรับเจ้าหน้าที่ (Clinical Screening Action) -->
+                    <div id="clinical-advice-box" class="rounded-2xl p-4 sm:p-5 bg-skybrand-50 border-2 border-skybrand-200 space-y-3">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-xl bg-skybrand-600 text-white flex items-center justify-center shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                                </svg>
+                            </div>
+                            <h3 class="font-bold text-base text-slate-950">แนวทางปฏิบัติสำหรับเจ้าหน้าที่คัดกรอง</h3>
+                        </div>
+                        
+                        <ul id="clinical-action-list" class="space-y-2 text-sm font-body text-slate-900 list-disc pl-5 leading-relaxed">
+                            <!-- รายการคำแนะนำอัปเดตอัตโนมัติ -->
+                        </ul>
+
+                        <!-- บริบทเพิ่มเติมเฉพาะเพศ (Gender-specific Clinical Note) -->
+                        <div id="gender-clinical-note" class="mt-3 pt-3 border-t border-skybrand-200/80 text-xs sm:text-sm font-body text-skybrand-950 flex items-start gap-2">
+                            <span class="font-bold shrink-0">ข้อสังเกตตามเพศ:</span>
+                            <span id="gender-note-text">สำหรับเพศชาย ควรประเมินรอบเอวร่วมด้วย (เกณฑ์ปกติไม่เกิน 90 ซม.) เพื่อคัดกรองภาวะอ้วนลงพุง</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ส่วนบันทึกประวัติการคัดกรองชั่วคราวในรอบวัน (Session Log) -->
+        <section class="bg-white rounded-3xl p-5 sm:p-7 shadow-md border border-slate-200 space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-clinic-100 text-clinic-800 flex items-center justify-center">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="text-base sm:text-lg font-bold text-slate-900">ประวัติการคัดกรองรอบวัน (Session Log)</h2>
+                        <p class="text-xs sm:text-sm text-slate-600 font-body">บันทึกข้อมูลชั่วคราวสำหรับเจ้าหน้าที่จุดคัดกรอง (ข้อมูลจะรีเซ็ตเมื่อปิดหน้าเว็บ)</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <span id="record-count-badge" class="bg-slate-100 text-slate-800 text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-200">
+                        บันทึกแล้ว 0 ราย
+                    </span>
+                    <button type="button" onclick="clearSessionLogs()" id="btn-clear-logs" class="hidden text-xs font-bold text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-200 transition-colors">
+                        ล้างประวัติทั้งหมด
+                    </button>
+                </div>
+            </div>
+
+            <!-- ตารางแสดงประวัติการคัดกรอง (รองรับการเลื่อนแนวนอนบนมือถือ) -->
+            <div class="overflow-x-auto rounded-2xl border border-slate-200">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-800 text-xs sm:text-sm font-bold border-b border-slate-200">
+                            <th class="py-3 px-4">คิว / เวลา</th>
+                            <th class="py-3 px-4">เพศ</th>
+                            <th class="py-3 px-4">น้ำหนัก / ส่วนสูง</th>
+                            <th class="py-3 px-4">ค่า BMI</th>
+                            <th class="py-3 px-4">ผลการคัดกรอง (เกณฑ์)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="session-log-body" class="divide-y divide-slate-200 text-sm font-body bg-white">
+                        <tr id="empty-log-row">
+                            <td colspan="5" class="py-8 text-center text-slate-500">
+                                ยังไม่มีรายการบันทึกในรอบวันนี้ กดปุ่ม <strong>"บันทึกผลการคัดกรองลงประวัติรอบวัน"</strong> เพื่อเก็บสถิติ
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="max-w-6xl mx-auto px-4 py-6 text-center text-xs text-slate-600 font-body">
+        <p>เครื่องมือจำลองการคัดกรองทางการแพทย์เบื้องต้น (Simulated Clinic Screening Tool) • อ้างอิงเกณฑ์ดัชนีมวลกายสำหรับคนเอเชีย (กรมอนามัย กระทรวงสาธารณสุข) และองค์การอนามัยโลก (WHO)</p>
+    </footer>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // สถานะเริ่มต้นของแอปพลิเคชัน (Application State)
+        const state = {
+            ageGroup: 'adult',      // 'adult' | 'minor'
+            gender: 'male',         // 'male' | 'female'
+            weight: 62.0,           // kg
+            height: 168.0,          // cm
+            standard: 'asia',       // 'asia' | 'who'
+            queueNumber: 1,
+            logs: []
+        };
+
+        // ฟังก์ชันแสดงการแจ้งเตือนมุมขวาบน (แทนการใช้ alert)
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const bgClass = type === 'success' 
+                ? 'bg-emerald-900 text-white border-emerald-700' 
+                : 'bg-amber-900 text-white border-amber-700';
+
+            toast.className = `${bgClass} border px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 text-sm font-semibold pointer-events-auto transform transition-all duration-300 translate-y-0 opacity-100`;
+            toast.innerHTML = `
+                <svg class="w-5 h-5 shrink-0 ${type === 'success' ? 'text-emerald-300' : 'text-amber-300'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span>${message}</span>
+            `;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // สลับเกณฑ์อายุ (18 ปีขึ้นไป vs ต่ำกว่า 18 ปี)
+        function setAgeGroup(group) {
+            state.ageGroup = group;
+            const btnAdult = document.getElementById('btn-age-adult');
+            const btnMinor = document.getElementById('btn-age-minor');
+            const warningBox = document.getElementById('minor-warning-box');
+            const formSection = document.getElementById('adult-form-section');
+            const resultCard = document.getElementById('result-card');
+
+            if (group === 'adult') {
+                btnAdult.className = "p-3.5 rounded-2xl border-2 border-clinic-600 bg-clinic-50 text-clinic-950 font-bold text-left transition-all flex items-center gap-3 shadow-sm";
+                btnAdult.querySelector('span').innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>`;
+                btnAdult.querySelector('span').className = "w-6 h-6 rounded-full bg-clinic-600 text-white flex items-center justify-center shrink-0";
+
+                btnMinor.className = "p-3.5 rounded-2xl border-2 border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-left transition-all flex items-center gap-3";
+                btnMinor.querySelector('span').innerHTML = "";
+                btnMinor.querySelector('span').className = "w-6 h-6 rounded-full border-2 border-slate-300 flex items-center justify-center shrink-0";
+
+                warningBox.classList.add('hidden');
+                formSection.classList.remove('opacity-40', 'pointer-events-none');
+                resultCard.classList.remove('opacity-40', 'pointer-events-none');
+                calculateBMI();
+            } else {
+                btnMinor.className = "p-3.5 rounded-2xl border-2 border-amber-500 bg-amber-50 text-amber-950 font-bold text-left transition-all flex items-center gap-3 shadow-sm";
+                btnMinor.querySelector('span').innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 9v2m0 4h.01"/></svg>`;
+                btnMinor.querySelector('span').className = "w-6 h-6 rounded-full bg-amber-600 text-white flex items-center justify-center shrink-0";
+
+                btnAdult.className = "p-3.5 rounded-2xl border-2 border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-left transition-all flex items-center gap-3";
+                btnAdult.querySelector('span').innerHTML = "";
+                btnAdult.querySelector('span').className = "w-6 h-6 rounded-full border-2 border-slate-300 flex items-center justify-center shrink-0";
+
+                warningBox.classList.remove('hidden');
+                formSection.classList.add('opacity-40', 'pointer-events-none');
+                resultCard.classList.add('opacity-40', 'pointer-events-none');
+            }
+        }
+
+        // เลือกเพศ (ชาย / หญิง)
+        function selectGender(gender) {
+            state.gender = gender;
+            const btnMale = document.getElementById('btn-gender-male');
+            const btnFemale = document.getElementById('btn-gender-female');
+            const badge = document.getElementById('result-gender-badge');
+            const genderNoteText = document.getElementById('gender-note-text');
+
+            if (gender === 'male') {
+                btnMale.className = "p-4 rounded-2xl border-2 border-skybrand-600 bg-skybrand-50 text-skybrand-950 font-bold transition-all flex items-center justify-center gap-3 shadow-sm active:scale-98";
+                btnMale.querySelector('div:first-child').className = "w-10 h-10 rounded-xl bg-skybrand-600 text-white flex items-center justify-center shrink-0";
+
+                btnFemale.className = "p-4 rounded-2xl border-2 border-slate-200 bg-white hover:bg-rose-50/40 text-slate-800 font-bold transition-all flex items-center justify-center gap-3 active:scale-98";
+                btnFemale.querySelector('div:first-child').className = "w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0";
+
+                badge.textContent = "เพศชาย";
+                badge.className = "text-xs font-bold px-2.5 py-0.5 rounded-full bg-skybrand-100 text-skybrand-900";
+                genderNoteText.textContent = "สำหรับเพศชาย ควรวัดเส้นรอบเอวร่วมด้วย (เกณฑ์ปกติต้องไม่เกิน 90 ซม.) เพื่อคัดกรองความเสี่ยงภาวะอ้วนลงพุงและโรคหัวใจและหลอดเลือด";
+            } else {
+                btnFemale.className = "p-4 rounded-2xl border-2 border-rose-500 bg-rose-50 text-rose-950 font-bold transition-all flex items-center justify-center gap-3 shadow-sm active:scale-98";
+                btnFemale.querySelector('div:first-child').className = "w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0";
+
+                btnMale.className = "p-4 rounded-2xl border-2 border-slate-200 bg-white hover:bg-skybrand-50/40 text-slate-800 font-bold transition-all flex items-center justify-center gap-3 active:scale-98";
+                btnMale.querySelector('div:first-child').className = "w-10 h-10 rounded-xl bg-skybrand-100 text-skybrand-700 flex items-center justify-center shrink-0";
+
+                badge.textContent = "เพศหญิง";
+                badge.className = "text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-900";
+                genderNoteText.textContent = "สำหรับเพศหญิง ควรวัดเส้นรอบเอวร่วมด้วย (เกณฑ์ปกติต้องไม่เกิน 80 ซม.) และซักประวัติการตั้งครรภ์ก่อนแปลผลค่า BMI เสมอ";
+            }
+        }
+
+        // ปรับเพิ่ม-ลดตัวเลขด้วยปุ่ม + / -
+        function adjustValue(field, delta) {
+            const input = document.getElementById(`input-${field}`);
+            let currentVal = parseFloat(input.value) || (field === 'weight' ? 60 : 165);
+            let newVal = Math.round((currentVal + delta) * 10) / 10;
+
+            if (field === 'weight') {
+                newVal = Math.max(25, Math.min(300, newVal));
+            } else {
+                newVal = Math.max(100, Math.min(250, newVal));
+            }
+
+            input.value = newVal.toFixed(1);
+            calculateBMI();
+        }
+
+        // สลับมาตรฐานการแปลผล (เกณฑ์เอเชีย vs เกณฑ์สากล WHO)
+        function setStandard(std) {
+            state.standard = std;
+            const btnAsia = document.getElementById('std-asia');
+            const btnWho = document.getElementById('std-who');
+
+            if (std === 'asia') {
+                btnAsia.className = "px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold bg-white text-clinic-900 shadow-sm transition-all";
+                btnWho.className = "px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition-all";
+            } else {
+                btnWho.className = "px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold bg-white text-skybrand-900 shadow-sm transition-all";
+                btnAsia.className = "px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 transition-all";
+            }
+
+            renderGaugeSegments();
+            calculateBMI();
+        }
+
+        // สร้างแถบสีของ Gauge ตามเกณฑ์ที่เลือก
+        function renderGaugeSegments() {
+            const bar = document.getElementById('bmi-gauge-bar');
+            const midLabels = document.getElementById('gauge-mid-labels');
+
+            if (state.standard === 'asia') {
+                midLabels.textContent = "ปกติ (18.5-22.9) | ท้วม (23.0-24.9)";
+                // สเกลแสดงผลจาก BMI 15 ถึง 35 (ช่วงกว้าง 20 หน่วย)
+                // <18.5 (3.5/20 = 17.5%), 18.5-22.9 (4.5/20 = 22.5%), 23-24.9 (2/20 = 10%), 25-29.9 (5/20 = 25%), >=30 (5/20 = 25%)
+                bar.innerHTML = `
+                    <div style="width: 17.5%" class="bg-sky-400 h-full border-r border-white/60" title="ผอม (< 18.5)"></div>
+                    <div style="width: 22.5%" class="bg-emerald-500 h-full border-r border-white/60" title="ปกติ (18.5 - 22.9)"></div>
+                    <div style="width: 10%" class="bg-amber-400 h-full border-r border-white/60" title="ท้วม (23.0 - 24.9)"></div>
+                    <div style="width: 25%" class="bg-orange-500 h-full border-r border-white/60" title="อ้วนระดับ 1 (25.0 - 29.9)"></div>
+                    <div style="width: 25%" class="bg-rose-600 h-full" title="อ้วนระดับ 2 (>= 30.0)"></div>
+                `;
+            } else {
+                midLabels.textContent = "ปกติ (18.5-24.9) | น้ำหนักเกิน (25.0-29.9)";
+                // สเกลแสดงผลจาก BMI 15 ถึง 35 (ช่วงกว้าง 20 หน่วย)
+                // <18.5 (17.5%), 18.5-24.9 (6.5/20 = 32.5%), 25-29.9 (25%), >=30 (25%)
+                bar.innerHTML = `
+                    <div style="width: 17.5%" class="bg-sky-400 h-full border-r border-white/60" title="ผอม (< 18.5)"></div>
+                    <div style="width: 32.5%" class="bg-emerald-500 h-full border-r border-white/60" title="ปกติ (18.5 - 24.9)"></div>
+                    <div style="width: 25%" class="bg-amber-400 h-full border-r border-white/60" title="น้ำหนักเกิน (25.0 - 29.9)"></div>
+                    <div style="width: 25%" class="bg-rose-600 h-full" title="อ้วน (>= 30.0)"></div>
+                `;
+            }
+        }
+
+        // คำนวณ BMI และอัปเดตหน้าจอ (แสดงทศนิยม 1 ตำแหน่งเท่านั้น)
+        function calculateBMI() {
+            const weightInput = document.getElementById('input-weight');
+            const heightInput = document.getElementById('input-height');
+            const weightError = document.getElementById('weight-error');
+            const heightError = document.getElementById('height-error');
+            const saveBtn = document.getElementById('btn-save-record');
+
+            const w = parseFloat(weightInput.value);
+            const h = parseFloat(heightInput.value);
+
+            let isValid = true;
+
+            if (isNaN(w) || w < 25 || w > 300) {
+                weightError.classList.remove('hidden');
+                isValid = false;
+            } else {
+                weightError.classList.add('hidden');
+                state.weight = w;
+            }
+
+            if (isNaN(h) || h < 100 || h > 250) {
+                heightError.classList.remove('hidden');
+                isValid = false;
+            } else {
+                heightError.classList.add('hidden');
+                state.height = h;
+            }
+
+            if (!isValid) {
+                saveBtn.disabled = true;
+                saveBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                return;
+            }
+
+            saveBtn.disabled = false;
+            saveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+            // สูตรคำนวณ BMI = น้ำหนัก (kg) / [ส่วนสูง (m)]^2
+            const heightInMeters = h / 100;
+            const rawBmi = w / (heightInMeters * heightInMeters);
+            // ปัดเศษให้เหลือทศนิยม 1 ตำแหน่งตามข้อกำหนด
+            const bmiFixed = rawBmi.toFixed(1);
+            const bmiNum = parseFloat(bmiFixed);
+
+            // แสดงตัวเลข BMI ทศนิยม 1 ตำแหน่ง
+            document.getElementById('bmi-value').textContent = bmiFixed;
+            document.getElementById('pointer-text').textContent = bmiFixed;
+
+            // คำนวณช่วงน้ำหนักที่เหมาะสมตามส่วนสูง (อิงเกณฑ์ปกติ)
+            const maxNormalBmi = state.standard === 'asia' ? 22.9 : 24.9;
+            const minHealthyWeight = (18.5 * heightInMeters * heightInMeters).toFixed(1);
+            const maxHealthyWeight = (maxNormalBmi * heightInMeters * heightInMeters).toFixed(1);
+            document.getElementById('healthy-weight-range').innerHTML = 
+                `น้ำหนักที่เหมาะสมตามส่วนสูง: <strong>${minHealthyWeight} - ${maxHealthyWeight} kg</strong>`;
+
+            // อัปเดตตำแหน่งตัวชี้บนแถบ Gauge (ช่วง 15 ถึง 35)
+            const clampedBmi = Math.max(15, Math.min(35, bmiNum));
+            const percentage = ((clampedBmi - 15) / 20) * 100;
+            document.getElementById('bmi-pointer').style.left = `${percentage}%`;
+
+            // แปลผลตามเกณฑ์มาตรฐาน
+            const evaluation = evaluateBMI(bmiNum, state.standard);
+            updateResultUI(evaluation);
+
+            return { bmiFixed, evaluation };
+        }
+
+        // เกณฑ์การแปลผลทางคลินิก
+        function evaluateBMI(bmi, standard) {
+            if (standard === 'asia') {
+                if (bmi < 18.5) {
+                    return {
+                        label: "ผอม / น้ำหนักน้อย",
+                        risk: "เสี่ยงขาดสารอาหารและภูมิคุ้มกันต่ำ",
+                        boxClass: "bg-sky-100 border-sky-500 text-sky-950",
+                        badgeClass: "bg-sky-100 text-sky-900 border-sky-300",
+                        actions: [
+                            "ซักประวัติการรับประทานอาหาร น้ำหนักที่ลดลงโดยไม่ทราบสาเหตุ และโรคประจำตัว",
+                            "แนะนำการเพิ่มพลังงานและโปรตีนที่มีคุณภาพในมื้ออาหารควบคู่การออกกำลังกายเสริมกล้ามเนื้อ",
+                            "หากน้ำหนักลดลงผิดปกติอย่างรวดเร็ว ควรส่งต่อพบแพทย์เพื่อตรวจคัดกรองเพิ่มเติม"
+                        ]
+                    };
+                } else if (bmi <= 22.9) {
+                    return {
+                        label: "ปกติ / สมส่วน",
+                        risk: "ความเสี่ยงโรคแทรกซ้อนต่ำ",
+                        boxClass: "bg-emerald-100 border-emerald-500 text-emerald-950",
+                        badgeClass: "bg-emerald-100 text-emerald-900 border-emerald-300",
+                        actions: [
+                            "ชื่นชมและให้กำลังใจผู้รับบริการในการรักษาระดับน้ำหนักให้อยู่ในเกณฑ์มาตรฐาน",
+                            "แนะนำการรับประทานอาหารครบ 5 หมู่ ลดหวาน มัน เค็ม และออกกำลังกายสม่ำเสมออย่างน้อย 150 นาที/สัปดาห์",
+                            "แนะนำตรวจสุขภาพประจำปีตามช่วงวัย"
+                        ]
+                    };
+                } else if (bmi <= 24.9) {
+                    return {
+                        label: "ท้วม / น้ำหนักเกิน",
+                        risk: "เริ่มมีความเสี่ยงโรค NCDs",
+                        boxClass: "bg-amber-100 border-amber-500 text-amber-950",
+                        badgeClass: "bg-amber-100 text-amber-900 border-amber-300",
+                        actions: [
+                            "คัดกรองความดันโลหิต ระดับน้ำตาลในเลือด และวัดรอบเอวเพิ่มเติม",
+                            "ให้คำปรึกษาปรับพฤติกรรม (หลัก 3อ. 2ส.) เน้นควบคุมปริมาณพลังงานและลดเครื่องดื่มรสหวาน",
+                            "นัดติดตามชั่งน้ำหนักซ้ำในอีก 1-3 เดือน"
+                        ]
+                    };
+                } else if (bmi <= 29.9) {
+                    return {
+                        label: "อ้วนระดับ 1",
+                        risk: "ความเสี่ยงโรคเบาหวานและความดันสูงปานกลาง",
+                        boxClass: "bg-orange-100 border-orange-500 text-orange-950",
+                        badgeClass: "bg-orange-100 text-orange-900 border-orange-300",
+                        actions: [
+                            "ตรวจวัดความดันโลหิต ระดับน้ำตาล (DTX/FBS) และประเมินความเสี่ยงโรคหัวใจและหลอดเลือด",
+                            "ส่งต่อคลินิกปรับเปลี่ยนพฤติกรรมสุขภาพ (DPAC) หรือนักกำหนดอาหารเพื่อวางแผนลดน้ำหนัก 5-10% ใน 6 เดือน",
+                            "ประเมินอาการปวดข้อเข่าหรือภาวะหยุดหายใจขณะหลับร่วมด้วย"
+                        ]
+                    };
+                } else {
+                    return {
+                        label: "อ้วนระดับ 2 (อ้วนมาก)",
+                        risk: "ความเสี่ยงโรคแทรกซ้อนรุนแรงสูง",
+                        boxClass: "bg-rose-100 border-rose-600 text-rose-950",
+                        badgeClass: "bg-rose-100 text-rose-900 border-rose-300",
+                        actions: [
+                            "ส่งต่อพบแพทย์เพื่อประเมินภาวะแทรกซ้อนทางเมตาบอลิก (เบาหวาน ความดัน ไขมันในเลือดสูง ไขมันพอกตับ)",
+                            "แนะนำการออกกำลังกายชนิดแรงกระแทกต่ำ (เช่น เดินในน้ำ ปั่นจักรยาน) เพื่อป้องกันการบาดเจ็บของข้อต่อ",
+                            "วางแผนติดตามการรักษาอย่างใกล้ชิดร่วมกับทีมสหวิชาชีพ"
+                        ]
+                    };
+                }
+            } else {
+                // เกณฑ์สากล (WHO)
+                if (bmi < 18.5) {
+                    return {
+                        label: "Underweight (ผอม)",
+                        risk: "เสี่ยงภาวะทุพโภชนาการ",
+                        boxClass: "bg-sky-100 border-sky-500 text-sky-950",
+                        badgeClass: "bg-sky-100 text-sky-900 border-sky-300",
+                        actions: [
+                            "ประเมินภาวะโภชนาการและซักประวัติการลดลงของน้ำหนักตัว",
+                            "แนะนำการบริโภคอาหารพลังงานสูงที่มีประโยชน์และพบแพทย์หากมีอาการผิดปกติ"
+                        ]
+                    };
+                } else if (bmi <= 24.9) {
+                    return {
+                        label: "Normal (ปกติ)",
+                        risk: "ความเสี่ยงมาตรฐาน (เกณฑ์สากล)",
+                        boxClass: "bg-emerald-100 border-emerald-500 text-emerald-950",
+                        badgeClass: "bg-emerald-100 text-emerald-900 border-emerald-300",
+                        actions: [
+                            "รักษาระดับน้ำหนักและการออกกำลังกายอย่างสม่ำเสมอ",
+                            "หมายเหตุ: สำหรับประชากรเอเชีย หากค่า BMI อยู่ระหว่าง 23.0 - 24.9 ควรเฝ้าระวังไขมันสะสมในช่องท้องร่วมด้วย"
+                        ]
+                    };
+                } else if (bmi <= 29.9) {
+                    return {
+                        label: "Overweight (น้ำหนักเกิน)",
+                        risk: "เริ่มมีความเสี่ยงเพิ่มขึ้น",
+                        boxClass: "bg-amber-100 border-amber-500 text-amber-950",
+                        badgeClass: "bg-amber-100 text-amber-900 border-amber-300",
+                        actions: [
+                            "คัดกรองความดันโลหิต ระดับน้ำตาลในเลือด และไขมันในเลือด",
+                            "แนะนำการควบคุมอาหารและเพิ่มกิจกรรมทางกายอย่างน้อย 150-300 นาที/สัปดาห์"
+                        ]
+                    };
+                } else {
+                    return {
+                        label: "Obesity (ภาวะอ้วน)",
+                        risk: "ความเสี่ยงโรคแทรกซ้อนสูง",
+                        boxClass: "bg-rose-100 border-rose-600 text-rose-950",
+                        badgeClass: "bg-rose-100 text-rose-900 border-rose-300",
+                        actions: [
+                            "ส่งต่อพบแพทย์เพื่อประเมินความเสี่ยงโรคไม่ติดต่อเรื้อรัง (NCDs)",
+                            "วางแผนลดน้ำหนักร่วมกับนักโภชนาการและทีมสหวิชาชีพ"
+                        ]
+                    };
+                }
+            }
+        }
+
+        // อัปเดตกล่องแสดงผลและคำแนะนำ
+        function updateResultUI(evaluation) {
+            const statusBox = document.getElementById('bmi-status-box');
+            const categoryLabel = document.getElementById('bmi-category-label');
+            const riskLabel = document.getElementById('bmi-risk-label');
+            const actionList = document.getElementById('clinical-action-list');
+
+            statusBox.className = `px-5 py-4 rounded-2xl border-2 text-center min-w-[170px] shadow-sm transition-colors duration-200 ${evaluation.boxClass}`;
+            categoryLabel.textContent = evaluation.label;
+            riskLabel.textContent = evaluation.risk;
+
+            actionList.innerHTML = evaluation.actions
+                .map(item => `<li>${item}</li>`)
+                .join('');
+        }
+
+        // บันทึกประวัติการคัดกรองลงใน Session Log
+        function saveScreeningRecord() {
+            if (state.ageGroup !== 'adult') {
+                showToast('ไม่สามารถบันทึกได้ เนื่องจากผู้รับบริการอายุต่ำกว่า 18 ปี', 'warning');
+                return;
+            }
+
+            const result = calculateBMI();
+            if (!result) return;
+
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+            const queueStr = `#${String(state.queueNumber).padStart(3, '0')}`;
+
+            const record = {
+                queue: queueStr,
+                time: timeStr,
+                gender: state.gender === 'male' ? 'ชาย' : 'หญิง',
+                weight: state.weight.toFixed(1),
+                height: state.height.toFixed(1),
+                bmi: result.bmiFixed,
+                category: result.evaluation.label,
+                badgeClass: result.evaluation.badgeClass,
+                standard: state.standard === 'asia' ? 'เกณฑ์เอเชีย' : 'WHO'
+            };
+
+            state.logs.unshift(record); // เพิ่มรายการล่าสุดไว้บนสุด
+            state.queueNumber += 1;
+            document.getElementById('current-queue-display').textContent = `#${String(state.queueNumber).padStart(3, '0')}`;
+
+            renderSessionLogs();
+            showToast(`บันทึกผลคิว ${queueStr} (BMI ${record.bmi}) เรียบร้อยแล้ว`, 'success');
+        }
+
+        // แสดงผลตารางประวัติการคัดกรอง
+        function renderSessionLogs() {
+            const tbody = document.getElementById('session-log-body');
+            const countBadge = document.getElementById('record-count-badge');
+            const clearBtn = document.getElementById('btn-clear-logs');
+
+            countBadge.textContent = `บันทึกแล้ว ${state.logs.length} ราย`;
+
+            if (state.logs.length === 0) {
+                clearBtn.classList.add('hidden');
+                tbody.innerHTML = `
+                    <tr id="empty-log-row">
+                        <td colspan="5" class="py-8 text-center text-slate-500">
+                            ยังไม่มีรายการบันทึกในรอบวันนี้ กดปุ่ม <strong>"บันทึกผลการคัดกรองลงประวัติรอบวัน"</strong> เพื่อเก็บสถิติ
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            clearBtn.classList.remove('hidden');
+            tbody.innerHTML = state.logs.map(log => `
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="py-3.5 px-4 font-bold text-slate-900">
+                        ${log.queue} <span class="text-xs font-normal text-slate-500 block sm:inline sm:ml-1">(${log.time} น.)</span>
+                    </td>
+                    <td class="py-3.5 px-4">
+                        <span class="inline-flex items-center gap-1.5 font-semibold ${log.gender === 'ชาย' ? 'text-skybrand-800' : 'text-rose-800'}">
+                            <span class="w-2 h-2 rounded-full ${log.gender === 'ชาย' ? 'bg-skybrand-500' : 'bg-rose-500'}"></span>
+                            ${log.gender}
+                        </span>
+                    </td>
+                    <td class="py-3.5 px-4 text-slate-800 font-medium">
+                        ${log.weight} kg / ${log.height} cm
+                    </td>
+                    <td class="py-3.5 px-4 font-extrabold text-base text-slate-950">
+                        ${log.bmi}
+                    </td>
+                    <td class="py-3.5 px-4">
+                        <span class="inline-block px-3 py-1 rounded-full text-xs font-bold border ${log.badgeClass}">
+                            ${log.category}
+                        </span>
+                        <span class="text-[11px] text-slate-500 block mt-0.5">${log.standard}</span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // ล้างข้อมูลสำหรับผู้รับบริการรายถัดไป (Reset)
+        function resetForNextPatient() {
+            setAgeGroup('adult');
+            selectGender('male');
+            document.getElementById('input-weight').value = "60.0";
+            document.getElementById('input-height').value = "165.0";
+            calculateBMI();
+            showToast('รีเซ็ตฟอร์มพร้อมรับผู้รับบริการรายถัดไป', 'success');
+        }
+
+        // ล้างประวัติการคัดกรองทั้งหมด
+        function clearSessionLogs() {
+            state.logs = [];
+            state.queueNumber = 1;
+            document.getElementById('current-queue-display').textContent = '#001';
+            renderSessionLogs();
+            showToast('ล้างประวัติการคัดกรองรอบวันเรียบร้อยแล้ว', 'warning');
+        }
+
+        // เริ่มต้นการทำงานเมื่อโหลดหน้าเว็บเสร็จสมบูรณ์
+        window.addEventListener('DOMContentLoaded', () => {
+            renderGaugeSegments();
+            selectGender('male');
+            calculateBMI();
+        });
+    </script>
+</body>
+</html>
